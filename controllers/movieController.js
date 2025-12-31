@@ -7,11 +7,13 @@ const {
 } = require("../services/tmdb.service");
 const { generateEmbedding } = require("../services/embedding.service");
 const User = require("../models/User");
+const Wishlist = require("../models/Wishlist");
 const LikedMovie = require("../models/LikedMovie");
-const { getMovieVectorById, upsertMovieVector } = require("../services/vector.service");
-const { averageVectors } = require("../utils/vector.util");
 const { searchSimilarMovies } = require("../services/vector.service");
 const { promisePool } = require("../utils/common.util");
+const processMovieVector = require("../jobs/processMovieVector");
+const rebuildUserVector = require("../jobs/rebuildUserVector");
+
 exports.testPopularMovies = async (req, res) => {
 	const movies = await getPopularMovies();
 	res.json(movies.slice(0, 5));
@@ -43,7 +45,7 @@ exports.testEmbedding = async (req, res) => {
 exports.likeMovie = async (req, res) => {
 	try {
 		const userId = req.user._id;
-		const { movieId, title, posterUrl, overview, rating, year, genres } = req.body;
+		const { movieId, title, posterUrl, overview, rating, year } = req.body;
 
 		// Prevent duplicates in liked collection
 		const existing = await LikedMovie.findOne({ user: userId, movieId });
@@ -52,37 +54,6 @@ exports.likeMovie = async (req, res) => {
 				success: false,
 				message: "Movie already liked",
 			});
-		}
-
-		// Try to get existing vector
-		let vector = await getMovieVectorById(movieId);
-
-		// If vector doesn't exist, generate and store it
-		if (!vector) {
-			try {
-				// Get full movie data including combinedText
-				const fullMovie = await getFullMovieData(movieId);
-
-				if (fullMovie.combinedText) {
-					// Generate embedding
-					const newVector = await generateEmbedding(fullMovie.combinedText);
-
-					if (newVector && newVector.length > 0) {
-						// Store the new vector
-						await upsertMovieVector(movieId, newVector);
-						vector = newVector;
-					}
-				}
-			} catch (error) {
-				// Handle TMDB errors gracefully
-				if (error.message.includes("TMDB") || error.message.includes("Failed to connect")) {
-					console.warn(`TMDB service unavailable for movie ${movieId}, continuing without vector`);
-					// Continue with empty vector - the movie will still be liked
-				} else {
-					console.error("Error generating vector for movie:", movieId, error);
-					// For other errors, also continue without vector
-				}
-			}
 		}
 
 		// Store like with embedded vector (or empty array if vector generation failed)
@@ -94,22 +65,18 @@ exports.likeMovie = async (req, res) => {
 			year,
 			overview,
 			rating,
-			genres,
-			vector: vector || [],
 		});
 
-		// Rebuild user's taste vector from all liked movies
-		const user = await User.findById(userId);
-		const likedMovies = await LikedMovie.find({ user: userId }, { vector: 1, _id: 0 });
-		const vectors = likedMovies.map((m) => m.vector).filter((v) => v && v.length > 0);
-
-		user.userVector = vectors.length ? averageVectors(vectors) : [];
-		await user.save();
-
+		// Instant response
 		res.status(201).json({
 			success: true,
 			message: "Movie liked",
 			data: liked,
+		});
+
+		// Async vector processing
+		setImmediate(() => {
+			processMovieVector(userId, movieId).catch(console.error);
 		});
 	} catch (error) {
 		console.error("likeMovie error:", error);
@@ -125,20 +92,26 @@ exports.dislikeMovie = async (req, res) => {
 		const userId = req.user._id;
 		const { movieId } = req.body;
 
-		// Remove from liked collection if it exists
-		await LikedMovie.findOneAndDelete({ user: userId, movieId });
+		const removed = await LikedMovie.findOneAndDelete({
+			user: userId,
+			movieId,
+		});
 
-		// Rebuild user vector from remaining likes
-		const user = await User.findById(userId);
-		const likedMovies = await LikedMovie.find({ user: userId }, { vector: 1, _id: 0 });
-		const vectors = likedMovies.map((m) => m.vector).filter((v) => v && v.length > 0);
+		if (!removed) {
+			return res.status(404).json({
+				success: false,
+				message: "Movie not found in liked list",
+			});
+		}
 
-		user.userVector = vectors.length ? averageVectors(vectors) : [];
-		await user.save();
-
+		// Respond immediately
 		res.json({
 			success: true,
 			message: "Movie disliked",
+		});
+		// Async rebuild (rare operation)
+		setImmediate(() => {
+			rebuildUserVector(userId).catch(console.error);
 		});
 	} catch (error) {
 		console.error("dislikeMovie error:", error);
@@ -178,9 +151,10 @@ exports.getRecommendations = async (req, res) => {
 				results: [],
 			});
 		}
-
+		const watchlist = await Wishlist.find({ user: userId }, { movieId: 1, _id: 0 });
+		const watchlistSet = new Set(watchlist.map((m) => m.movieId));
 		// 2️⃣ Get similar movies from Qdrant
-		const results = await searchSimilarMovies(user.userVector, 1000);
+		const results = await searchSimilarMovies(user.userVector, 1000, [...watchlistSet]);
 
 		// 3️⃣ Build exclusion set from liked movies
 		const likedMovies = await LikedMovie.find({ user: userId }, { movieId: 1, _id: 0 });

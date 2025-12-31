@@ -11,5 +11,14 @@ const averageVectors = (vectors) => {
 	}
 	return avg.map((v) => v / vectors.length);
 };
+const incrementalAverage = (current, count, next) => {
+	if (!current || !current.length) return next;
 
-module.exports = { averageVectors };
+	const result = new Array(next.length);
+	for (let i = 0; i < next.length; i++) {
+		result[i] = (current[i] * count + next[i]) / (count + 1);
+	}
+	return result;
+};
+
+module.exports = { averageVectors, incrementalAverage };

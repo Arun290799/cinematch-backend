@@ -86,7 +86,7 @@ process.on("uncaughtException", (err) => {
 
 // (async () => {
 // 	try {
-// 		await createCollection();
+// 		// await createCollection();
 // 		// await indexMovies();
 // 		// await indexPopularMovies();
 // 	} catch (error) {

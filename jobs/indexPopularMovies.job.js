@@ -12,11 +12,11 @@ const indexPopularMovies = async () => {
 	let totalIndexed = 0;
 	let totalSkipped = 0;
 	let totalFailed = 0;
-	let page = 23;
+	let page = 426;
 	let hasMore = true;
 	const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-	while (hasMore && page <= 100) {
+	while (hasMore && page <= 500) {
 		// Limit to 100 pages to avoid excessive API calls
 		try {
 			const { movieIds, totalPages, hasMore: more } = await getPopularMoviesByPage(page);

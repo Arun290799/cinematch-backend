@@ -21,17 +21,6 @@ const likedMovieSchema = new mongoose.Schema(
 		year: String,
 		overview: String,
 		rating: Number,
-		genres: [
-			{
-				id: Number,
-				name: String,
-			},
-		],
-		vector: [
-			{
-				type: Number,
-			},
-		],
 	},
 	{
 		timestamps: true,
@@ -45,5 +34,3 @@ likedMovieSchema.plugin(mongoosePaginate);
 likedMovieSchema.index({ user: 1, movieId: 1 }, { unique: true });
 
 module.exports = mongoose.model("LikedMovie", likedMovieSchema);
-
-

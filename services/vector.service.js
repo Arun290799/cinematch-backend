@@ -51,10 +51,25 @@ const getMovieVectorById = async (movieId) => {
 	});
 	return result[0]?.vector;
 };
-const searchSimilarMovies = async (userVector, limit = 10) => {
+const searchSimilarMovies = async (userVector, limit = 10, excludeMovieIds = []) => {
+	const stringIds = excludeMovieIds.map((id) => Number(id));
+	const filter =
+		stringIds.length > 0
+			? {
+					must_not: [
+						{
+							key: "movieId",
+							match: {
+								any: stringIds,
+							},
+						},
+					],
+			  }
+			: undefined;
 	const result = await qdrant.search(COLLECTION_NAME, {
 		vector: userVector,
 		limit,
+		filter,
 	});
 
 	return result.map((item) => ({
