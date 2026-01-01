@@ -193,7 +193,7 @@ const discoverMovies = async (options = {}) => {
 		async () => {
 			const {
 				page = 1,
-				languages = "en",
+				languages,
 				search = "",
 				sortBy = "popularity.desc",
 				voteAverageGte,
@@ -203,11 +203,8 @@ const discoverMovies = async (options = {}) => {
 			} = options;
 
 			try {
-				let tempLanguages = Array.isArray(languages)
-					? languages.join("|")
-					: languages.includes(",")
-					? languages.replace(/,/g, "|")
-					: languages;
+				const languagesArr = languages ? languages.split(",").map((lang) => lang.trim()) : [];
+				let tempLanguages = languagesArr && languagesArr.length > 0 ? languagesArr.join("|") : "";
 				// If search query provided, use search endpoint
 				if (search && search.trim()) {
 					const response = await tmdbClient.get("/search/movie", {
@@ -217,9 +214,11 @@ const discoverMovies = async (options = {}) => {
 							language: "en-US",
 						},
 					});
-					response.data.results = response.data.results.filter((movie) =>
-						languages.includes(movie.original_language)
-					);
+					if (languagesArr && languagesArr.length > 0) {
+						response.data.results = response.data.results.filter((movie) =>
+							languagesArr.includes(movie.original_language)
+						);
+					}
 					return response.data;
 				}
 
@@ -233,7 +232,7 @@ const discoverMovies = async (options = {}) => {
 					with_genres: withGenres,
 					primary_release_year: year,
 				};
-				if (languages) {
+				if (tempLanguages) {
 					// Handle both string and array inputs
 					params.with_original_language = tempLanguages;
 				}
@@ -298,12 +297,13 @@ const getMoviesByDiscover = async (year, page, language) => {
 };
 
 /**
- * Fetches popular movies with pagination
+ * Fetches popular movies with pagination and optional year filtering
  * @param {number} page - Page number to fetch (1-based)
  * @param {string} [language='en-US'] - Language code for results
+ * @param {number} [yearGte] - Filter movies released in or after this year
  * @returns {Promise<{movieIds: number[], totalPages: number, hasMore: boolean}>}
  */
-const getPopularMoviesByPage = async (page = 1, language = "en-US") => {
+const getPopularMoviesByPage = async (page = 1, language = "en-US", yearGte) => {
 	return withRetry(
 		async () => {
 			const params = {
@@ -311,9 +311,19 @@ const getPopularMoviesByPage = async (page = 1, language = "en-US") => {
 				language,
 				sort_by: "popularity.desc",
 				"vote_count.gte": 10, // Ensure we get movies with some minimum votes
+				"vote_average.gte": 6, // Ensure we get movies with decent ratings
+				with_status: 0, // Only include movies with status "Released"
 			};
 
-			const response = await tmdbClient.get("/movie/popular", { params });
+			// Add year filter if provided
+			if (yearGte) {
+				params["primary_release_date.gte"] = `${yearGte}-01-01`;
+			}
+
+			// Use discover endpoint when year filter is applied, otherwise use popular endpoint
+			const endpoint = yearGte ? "/discover/movie" : "/movie/popular";
+
+			const response = await tmdbClient.get(endpoint, { params });
 			const data = response.data;
 
 			// Extract only movie IDs

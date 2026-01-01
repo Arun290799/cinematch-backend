@@ -201,7 +201,7 @@ exports.discoverMovies = async (req, res) => {
 		// Get query parameters with defaults
 		const {
 			page = 1,
-			languages = "en",
+			languages,
 			search = "",
 			sortBy = "popularity.desc",
 			voteAverageGte,
@@ -213,7 +213,6 @@ exports.discoverMovies = async (req, res) => {
 		// Convert to appropriate types
 		const options = {
 			page: parseInt(page, 10),
-			languages,
 			search: search.toString(),
 			sortBy,
 			voteAverageGte: voteAverageGte ? parseFloat(voteAverageGte) : undefined,
@@ -221,6 +220,9 @@ exports.discoverMovies = async (req, res) => {
 			withGenres: withGenres ? withGenres.toString() : undefined,
 			year: year ? parseInt(year, 10) : undefined,
 		};
+		if (languages) {
+			options.languages = languages;
+		}
 
 		const result = await tmdbDiscover(options);
 
