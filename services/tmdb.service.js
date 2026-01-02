@@ -340,6 +340,54 @@ const getPopularMoviesByPage = async (page = 1, language = "en-US", yearGte) => 
 	);
 };
 
+const getMovieTrailer = async (movieId) => {
+	return withRetry(
+		async () => {
+			try {
+				const response = await tmdbClient.get(`/movie/${movieId}/videos`, {
+					params: { language: "en-US" },
+				});
+
+				const videos = response.data.results || [];
+
+				// Find official trailer first, then any trailer, then any video
+				const trailer =
+					videos.find(
+						(video) => video.type === "Trailer" && video.site === "YouTube" && video.official === true
+					) ||
+					videos.find((video) => video.type === "Trailer" && video.site === "YouTube") ||
+					videos.find((video) => video.site === "YouTube");
+
+				if (!trailer) {
+					return null;
+				}
+
+				return {
+					key: trailer.key,
+					name: trailer.name,
+					site: trailer.site,
+					type: trailer.type,
+					official: trailer.official,
+					published_at: trailer.published_at,
+				};
+			} catch (error) {
+				if (error.response) {
+					if (error.response.status === 404) {
+						return null; // Movie not found, return null instead of throwing
+					}
+					throw new Error(`TMDB API error: ${error.response.status} - ${error.response.statusText}`);
+				} else if (error.request) {
+					throw new Error(`Failed to fetch trailer for movie ${movieId}: Failed to connect to TMDB API`);
+				} else {
+					throw new Error(`Error fetching movie trailer: ${error.message}`);
+				}
+			}
+		},
+		3,
+		1000
+	);
+};
+
 module.exports = {
 	getPopularMovies,
 	getPopularMoviesByPage,
@@ -351,4 +399,5 @@ module.exports = {
 	getFullMovieData,
 	discoverMovies,
 	getMoviesByDiscover,
+	getMovieTrailer,
 };

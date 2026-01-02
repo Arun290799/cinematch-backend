@@ -2,6 +2,7 @@ const {
 	getPopularMovies,
 	getFullMovieData,
 	getMovieDetails,
+	getMovieTrailer,
 	discoverMovies: tmdbDiscover,
 } = require("../services/tmdb.service");
 const { generateEmbedding } = require("../services/embedding.service");
@@ -24,9 +25,36 @@ exports.testMovieDetails = async (req, res) => {
 	res.json(movie);
 };
 exports.getMovieDetails = async (req, res) => {
-	const movieId = req.params.id;
-	const movie = await getMovieDetails(movieId);
-	res.json(movie);
+	try {
+		const movieId = req.params.id;
+		const includeTrailer = req.query.include_trailer === "true" || req.query.include_trailer === "1";
+		// Get basic movie details
+		const movie = await getMovieDetails(movieId);
+		// Add trailer if requested
+		if (includeTrailer) {
+			try {
+				const trailer = await getMovieTrailer(movieId);
+				movie.trailer = trailer;
+			} catch (trailerError) {
+				console.warn(`Failed to fetch trailer for movie ${movieId}:`, trailerError.message);
+				movie.trailer = null; // Don't fail the whole request if trailer fetch fails
+			}
+		}
+
+		res.json(movie);
+	} catch (error) {
+		console.error("Error in getMovieDetails:", error);
+		if (error.message.includes("not found")) {
+			return res.status(404).json({
+				success: false,
+				error: "Movie not found",
+			});
+		}
+		res.status(500).json({
+			success: false,
+			error: error.message || "Failed to fetch movie details",
+		});
+	}
 };
 
 exports.testEmbedding = async (req, res) => {
