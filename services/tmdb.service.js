@@ -108,16 +108,16 @@ const getMovieDetails = async (movieId) => {
 	);
 };
 
-const getMovieDetailsWithRetry = async (movieId, retries = 3) => {
-	for (let i = 0; i < retries; i++) {
-		try {
-			return await getMovieDetails(movieId);
-		} catch (err) {
-			if (i === retries - 1) throw err;
-			await new Promise((r) => setTimeout(r, 500 * (i + 1)));
-		}
-	}
-};
+// const getMovieDetailsWithRetry = async (movieId, retries = 3) => {
+// 	for (let i = 0; i < retries; i++) {
+// 		try {
+// 			return await getMovieDetails(movieId);
+// 		} catch (err) {
+// 			if (i === retries - 1) throw err;
+// 			await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+// 		}
+// 	}
+// };
 
 const getMovieKeywords = async (movieId) => {
 	try {
@@ -344,7 +344,7 @@ module.exports = {
 	getPopularMovies,
 	getPopularMoviesByPage,
 	getMovieDetails,
-	getMovieDetailsWithRetry,
+	// getMovieDetailsWithRetry,
 	// discoverMoviesWithRetry,
 	getMovieKeywords,
 	getMovieCredits,

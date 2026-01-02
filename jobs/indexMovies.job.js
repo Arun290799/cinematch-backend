@@ -76,7 +76,7 @@ const indexMovies = async () => {
 						yearIndexed++;
 
 						// 4️⃣ Store vector in Qdrant
-						await upsertMovieVector(movieId, vector);
+						await upsertMovieVector(movieId, vector, fullMovie);
 						await delay(250);
 					} catch (err) {
 						console.error(`❌ Failed to index movie ${movieId}`, err);

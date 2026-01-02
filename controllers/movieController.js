@@ -2,7 +2,6 @@ const {
 	getPopularMovies,
 	getFullMovieData,
 	getMovieDetails,
-	getMovieDetailsWithRetry,
 	discoverMovies: tmdbDiscover,
 } = require("../services/tmdb.service");
 const { generateEmbedding } = require("../services/embedding.service");
@@ -139,6 +138,8 @@ exports.getRecommendations = async (req, res) => {
 
 		const user = await User.findById(userId);
 		const page = parseInt(req.query.page, 10) || 1;
+		const languages = req.query.languages ? req.query.languages.split(",") : [];
+		const genres = req.query.genres ? req.query.genres.split(",") : [];
 		const limit = Math.min(parseInt(req.query.limit, 10) || 40, 40); // safety cap
 
 		// 1️⃣ Cold start handling
@@ -153,25 +154,24 @@ exports.getRecommendations = async (req, res) => {
 		}
 		const watchlist = await Wishlist.find({ user: userId }, { movieId: 1, _id: 0 });
 		const watchlistSet = new Set(watchlist.map((m) => m.movieId));
-		// 2️⃣ Get similar movies from Qdrant
-		const results = await searchSimilarMovies(user.userVector, 1000, [...watchlistSet]);
-
-		// 3️⃣ Build exclusion set from liked movies
 		const likedMovies = await LikedMovie.find({ user: userId }, { movieId: 1, _id: 0 });
-		const excluded = new Set(likedMovies.map((m) => m.movieId));
+		const likedSet = new Set(likedMovies.map((m) => m.movieId));
+		// 2️⃣ Get similar movies from Qdrant
+		const results = await searchSimilarMovies(user.userVector, 500, [...watchlistSet, ...likedSet], {
+			languages,
+			genres,
+		});
 
-		// 4️⃣ Filter results (remove already liked) and paginate
-		const filtered = results.filter((r) => !excluded.has(r.movieId));
-		const totalResults = filtered.length;
+		const totalResults = results.length;
 		const totalPages = totalResults === 0 ? 0 : Math.ceil(totalResults / limit);
 		const startIndex = (page - 1) * limit;
-		const pageItems = filtered.slice(startIndex, startIndex + limit);
+		const pageItems = results.slice(startIndex, startIndex + limit);
 
 		// 5️⃣ Enrich with TMDB movie details (similar shape to discover results)
 		const recommendations = (
 			await promisePool(pageItems, 5, async (r) => {
 				try {
-					const details = await getMovieDetailsWithRetry(r.movieId);
+					const details = await getMovieDetails(r.movieId);
 					return {
 						...details,
 						score: r.score,

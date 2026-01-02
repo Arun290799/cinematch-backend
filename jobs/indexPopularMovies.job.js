@@ -12,15 +12,14 @@ const indexPopularMovies = async () => {
 	let totalIndexed = 0;
 	let totalSkipped = 0;
 	let totalFailed = 0;
-	let page = 426;
+	let page = 265;
 	let hasMore = true;
 	const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-	while (hasMore && page <= 500) {
+	while (hasMore && page <= 1000) {
 		// Limit to 100 pages to avoid excessive API calls
 		try {
-			const { movieIds, totalPages, hasMore: more } = await getPopularMoviesByPage(page);
-
+			const { movieIds, totalPages, hasMore: more } = await getPopularMoviesByPage(page, "en-US", 2010);
 			console.log(`📄 Processing page ${page}/${totalPages}`);
 			console.log(`   Found ${movieIds.length} popular movies`);
 
@@ -59,7 +58,7 @@ const indexPopularMovies = async () => {
 					}
 
 					// 4️⃣ Store vector in Qdrant
-					await upsertMovieVector(movieId, vector);
+					await upsertMovieVector(movieId, vector, fullMovie);
 					console.log(`   ✅ Indexed: ${fullMovie.title} (${movieId})`);
 					totalIndexed++;
 

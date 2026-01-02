@@ -1,13 +1,9 @@
 const redis = require("../lib/redis");
 const User = require("../models/User");
+const { getFullMovieData } = require("../services/tmdb.service");
 const { incrementalAverage } = require("../utils/vector.util");
-
-const {
-	getMovieVectorById,
-	upsertMovieVector,
-	generateEmbedding,
-	getFullMovieData,
-} = require("../services/vector.service");
+const { generateEmbedding } = require("../services/embedding.service");
+const { upsertMovieVector, getMovieVectorById } = require("../services/vector.service");
 
 module.exports = async function processMovieVector(userId, movieId) {
 	const cacheKey = `movie:vector:${movieId}`;
@@ -19,13 +15,17 @@ module.exports = async function processMovieVector(userId, movieId) {
 		vector = await getMovieVectorById(movieId);
 
 		if (!vector) {
-			const fullMovie = await getFullMovieData(movieId);
-			if (!fullMovie?.combinedText) return;
+			try {
+				const fullMovie = await getFullMovieData(movieId);
+				if (!fullMovie?.combinedText) return;
 
-			vector = await generateEmbedding(fullMovie.combinedText);
-			if (!vector?.length) return;
+				vector = await generateEmbedding(fullMovie.combinedText);
+				if (!vector?.length) return;
 
-			await upsertMovieVector(movieId, vector);
+				await upsertMovieVector(movieId, vector, fullMovie);
+			} catch (error) {
+				console.error(`Failed to generate vector for movie ${movieId}:`, error);
+			}
 		}
 
 		await redis.set(cacheKey, JSON.stringify(vector), "EX", 86400);
