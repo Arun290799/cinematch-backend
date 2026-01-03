@@ -219,6 +219,15 @@ const discoverMovies = async (options = {}) => {
 							languagesArr.includes(movie.original_language)
 						);
 					}
+					if (withGenres) {
+						const genreIds = Array.isArray(withGenres)
+							? withGenres.map(Number)
+							: withGenres.split(",").map(Number);
+
+						response.data.results = response.data.results.filter((movie) =>
+							movie.genre_ids?.some((id) => genreIds.includes(id))
+						);
+					}
 					return response.data;
 				}
 
@@ -276,7 +285,8 @@ const getMoviesByDiscover = async (year, page, language) => {
 				sort_by: "popularity.desc",
 				primary_release_year: year,
 				with_original_language: language,
-				"vote_average.gte": 5,
+				with_status: 0,
+				// "vote_average.gte": 5,
 			};
 
 			const response = await tmdbClient.get("/discover/movie", { params });
