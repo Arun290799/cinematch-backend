@@ -11,6 +11,7 @@ const {
 	discoverMovies,
 	likedMovies,
 	likedMovieIds,
+	clearAllLikes,
 } = require("../controllers/movieController");
 
 const { protect } = require("../middleware/authMiddleware");
@@ -26,6 +27,7 @@ router.get("/test/embedding", testEmbedding);
 //private routes
 router.post("/like", protect, likeMovie);
 router.post("/dislike", protect, dislikeMovie);
+router.delete("/clear-all-likes", protect, clearAllLikes);
 router.get("/recommendations", protect, getRecommendations);
 router.get("/likedmovies", protect, likedMovies);
 router.get("/likedmovieIds", protect, likedMovieIds);

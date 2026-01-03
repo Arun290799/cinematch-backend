@@ -302,6 +302,33 @@ exports.likedMovies = async (req, res) => {
 	}
 };
 
+exports.clearAllLikes = async (req, res) => {
+	try {
+		const userId = req.user._id;
+
+		// Delete all liked movies for the user
+		const result = await LikedMovie.deleteMany({ user: userId });
+
+		// Clear user vector since there are no more likes
+		await User.findByIdAndUpdate(userId, {
+			$unset: { userVector: 1 },
+		});
+
+		// Respond immediately
+		res.json({
+			success: true,
+			message: "All liked movies cleared",
+			deletedCount: result.deletedCount,
+		});
+	} catch (error) {
+		console.error("clearAllLikes error:", error);
+		res.status(500).json({
+			success: false,
+			error: error.message || "Failed to clear liked movies",
+		});
+	}
+};
+
 // Returns ONLY all liked movie IDs for the authenticated user
 // Useful for quickly checking "is liked" status on arbitrary movie lists
 exports.likedMovieIds = async (req, res) => {
