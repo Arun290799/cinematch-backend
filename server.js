@@ -6,10 +6,11 @@ const cookieParser = require("cookie-parser");
 const authRoutes = require("./routes/authRoutes");
 const movieRoutes = require("./routes/movieRoutes");
 const wishlistRoutes = require("./routes/wishlistRoutes");
+const contactRoutes = require("./routes/contactRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 const { createCollection } = require("./services/vector.service");
-// const { indexMovies } = require("./jobs/indexMovies.job");
-// const { indexPopularMovies } = require("./jobs/indexPopularMovies.job");
+const { indexMovies } = require("./jobs/indexMovies.job");
+const { indexPopularMovies } = require("./jobs/indexPopularMovies.job");
 const app = express();
 
 // CORS configuration
@@ -30,6 +31,7 @@ app.use(cookieParser());
 app.use("/api/auth", authRoutes);
 app.use("/api/movies", movieRoutes);
 app.use("/api/wishlist", wishlistRoutes);
+app.use("/api/contact", contactRoutes);
 // Health check endpoint
 app.get("/health", (req, res) => {
 	res.status(200).json({
@@ -84,16 +86,16 @@ process.on("uncaughtException", (err) => {
 	// process.exit(1);
 });
 
-// (async () => {
-// 	try {
-// 		// await createCollection();
-// 		// await indexMovies();
-// 		// await indexPopularMovies();
-// 	} catch (error) {
-// 		console.error("❌ Failed to start server", error);
-// 		process.exit(1);
-// 	}
-// })();
+(async () => {
+	try {
+		// await createCollection();
+		// await indexMovies();
+		// await indexPopularMovies();
+	} catch (error) {
+		console.error("❌ Failed to start server", error);
+		process.exit(1);
+	}
+})();
 // Connect to MongoDB
 mongoose
 	.connect(process.env.MONGODB_URI)
