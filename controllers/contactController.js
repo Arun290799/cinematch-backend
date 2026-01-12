@@ -41,6 +41,18 @@ const submitContact = async (req, res) => {
 		// Send email using Nodemailer asynchronously
 		setImmediate(async () => {
 			try {
+				console.log("🔍 [EMAIL DEBUG] Starting email send process");
+				console.log("🔍 [EMAIL DEBUG] Environment variables check:");
+				console.log("  - EMAIL_FROM:", process.env.EMAIL_FROM);
+				console.log("  - CONTACT_EMAIL:", process.env.CONTACT_EMAIL || "cinematch913@gmail.com");
+				console.log("  - EMAIL_SERVER_HOST:", process.env.EMAIL_SERVER_HOST);
+				console.log("  - EMAIL_SERVER_PORT:", process.env.EMAIL_SERVER_PORT);
+				console.log("  - EMAIL_SERVER_USER:", process.env.EMAIL_SERVER_USER);
+				console.log(
+					"  - EMAIL_SERVER_PASSWORD:",
+					process.env.EMAIL_SERVER_PASSWORD ? "***SET***" : "***NOT SET***"
+				);
+
 				const emailData = {
 					from: process.env.EMAIL_FROM,
 					to: process.env.CONTACT_EMAIL || "cinematch913@gmail.com",
@@ -186,9 +198,33 @@ const submitContact = async (req, res) => {
 					`,
 				};
 
-				await transporter.sendMail(emailData);
+				console.log("🔍 [EMAIL DEBUG] Email data prepared:");
+				console.log("  - From:", emailData.from);
+				console.log("  - To:", emailData.to);
+				console.log("  - Subject:", emailData.subject);
+				console.log("  - Transporter config:", {
+					host: transporter.options.host,
+					port: transporter.options.port,
+					secure: transporter.options.secure,
+					auth: {
+						user: transporter.options.auth.user,
+						pass: transporter.options.auth.pass ? "***SET***" : "***NOT SET***",
+					},
+				});
+
+				console.log("🔍 [EMAIL DEBUG] Attempting to send email...");
+				const result = await transporter.sendMail(emailData);
+				console.log("✅ [EMAIL SUCCESS] Email sent successfully!");
+				console.log("🔍 [EMAIL DEBUG] Send result:", result);
 			} catch (emailError) {
-				console.error("Failed to send email:", emailError);
+				console.error("❌ [EMAIL ERROR] Failed to send email:", emailError);
+				console.error("🔍 [EMAIL ERROR] Error details:", {
+					message: emailError.message,
+					code: emailError.code,
+					command: emailError.command,
+					response: emailError.response,
+					responseCode: emailError.responseCode,
+				});
 			}
 		});
 
