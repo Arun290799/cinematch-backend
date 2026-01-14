@@ -39,194 +39,157 @@ const submitContact = async (req, res) => {
 		await contact.save();
 
 		// Send email using Nodemailer asynchronously
-		setImmediate(async () => {
-			try {
-				console.log("🔍 [EMAIL DEBUG] Starting email send process");
-				console.log("🔍 [EMAIL DEBUG] Environment variables check:");
-				console.log("  - EMAIL_FROM:", process.env.EMAIL_FROM);
-				console.log("  - CONTACT_EMAIL:", process.env.CONTACT_EMAIL || "cinematch913@gmail.com");
-				console.log("  - EMAIL_SERVER_HOST:", process.env.EMAIL_SERVER_HOST);
-				console.log("  - EMAIL_SERVER_PORT:", process.env.EMAIL_SERVER_PORT);
-				console.log("  - EMAIL_SERVER_USER:", process.env.EMAIL_SERVER_USER);
-				console.log(
-					"  - EMAIL_SERVER_PASSWORD:",
-					process.env.EMAIL_SERVER_PASSWORD ? "***SET***" : "***NOT SET***"
-				);
+		// setImmediate(async () => {
+		// 	try {
+		// 		const emailData = {
+		// 			from: process.env.EMAIL_FROM,
+		// 			to: process.env.CONTACT_EMAIL || "cinematch913@gmail.com",
+		// 			subject: `Contact Form: Message from ${name}`,
+		// 			text: `You have received a new contact form submission:\n\nName: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
+		// 			html: `
+		// 				<!DOCTYPE html>
+		// 				<html>
+		// 				<head>
+		// 					<meta charset="utf-8">
+		// 					<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		// 					<title>New Contact Form Submission</title>
+		// 					<style>
+		// 						body {
+		// 							font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+		// 							line-height: 1.6;
+		// 							color: #333;
+		// 							max-width: 600px;
+		// 							margin: 0 auto;
+		// 							padding: 20px;
+		// 							background-color: #f4f4f4;
+		// 						}
+		// 						.container {
+		// 							background-color: #ffffff;
+		// 							border-radius: 8px;
+		// 							padding: 30px;
+		// 							box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+		// 						}
+		// 						.header {
+		// 							text-align: center;
+		// 							margin-bottom: 30px;
+		// 							padding-bottom: 20px;
+		// 							border-bottom: 2px solid #e9ecef;
+		// 						}
+		// 						.header h1 {
+		// 							color: #2c3e50;
+		// 							margin: 0;
+		// 							font-size: 28px;
+		// 							font-weight: 600;
+		// 						}
+		// 						.header p {
+		// 							color: #6c757d;
+		// 							margin: 5px 0 0 0;
+		// 							font-size: 14px;
+		// 						}
+		// 						.content {
+		// 							margin-bottom: 30px;
+		// 						}
+		// 						.field-group {
+		// 							margin-bottom: 20px;
+		// 						}
+		// 						.field-label {
+		// 							font-weight: 600;
+		// 							color: #495057;
+		// 							margin-bottom: 5px;
+		// 							font-size: 14px;
+		// 							text-transform: uppercase;
+		// 							letter-spacing: 0.5px;
+		// 						}
+		// 						.field-value {
+		// 							background-color: #f8f9fa;
+		// 							padding: 12px 15px;
+		// 							border-radius: 6px;
+		// 							border-left: 4px solid #007bff;
+		// 							font-size: 16px;
+		// 							word-wrap: break-word;
+		// 						}
+		// 						.message-field {
+		// 							background-color: #f8f9fa;
+		// 							padding: 15px;
+		// 							border-radius: 6px;
+		// 							border-left: 4px solid #28a745;
+		// 							font-size: 16px;
+		// 							line-height: 1.6;
+		// 							white-space: pre-wrap;
+		// 						}
+		// 						.footer {
+		// 							text-align: center;
+		// 							padding-top: 20px;
+		// 							border-top: 1px solid #e9ecef;
+		// 							color: #6c757d;
+		// 							font-size: 12px;
+		// 						}
+		// 						.brand {
+		// 							color: #007bff;
+		// 							font-weight: 600;
+		// 						}
+		// 						.timestamp {
+		// 							background-color: #e9ecef;
+		// 							padding: 8px 12px;
+		// 							border-radius: 4px;
+		// 							font-size: 12px;
+		// 							color: #6c757d;
+		// 							text-align: center;
+		// 							margin-bottom: 20px;
+		// 						}
+		// 					</style>
+		// 				</head>
+		// 				<body>
+		// 					<div class="container">
+		// 						<div class="header">
+		// 							<h1>🎬 New Contact Form Submission</h1>
+		// 							<p>CinemaMatch - Movie Recommendation Platform</p>
+		// 						</div>
 
-				const emailData = {
-					from: process.env.EMAIL_FROM,
-					to: process.env.CONTACT_EMAIL || "cinematch913@gmail.com",
-					subject: `Contact Form: Message from ${name}`,
-					text: `You have received a new contact form submission:\n\nName: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
-					html: `
-						<!DOCTYPE html>
-						<html>
-						<head>
-							<meta charset="utf-8">
-							<meta name="viewport" content="width=device-width, initial-scale=1.0">
-							<title>New Contact Form Submission</title>
-							<style>
-								body {
-									font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-									line-height: 1.6;
-									color: #333;
-									max-width: 600px;
-									margin: 0 auto;
-									padding: 20px;
-									background-color: #f4f4f4;
-								}
-								.container {
-									background-color: #ffffff;
-									border-radius: 8px;
-									padding: 30px;
-									box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-								}
-								.header {
-									text-align: center;
-									margin-bottom: 30px;
-									padding-bottom: 20px;
-									border-bottom: 2px solid #e9ecef;
-								}
-								.header h1 {
-									color: #2c3e50;
-									margin: 0;
-									font-size: 28px;
-									font-weight: 600;
-								}
-								.header p {
-									color: #6c757d;
-									margin: 5px 0 0 0;
-									font-size: 14px;
-								}
-								.content {
-									margin-bottom: 30px;
-								}
-								.field-group {
-									margin-bottom: 20px;
-								}
-								.field-label {
-									font-weight: 600;
-									color: #495057;
-									margin-bottom: 5px;
-									font-size: 14px;
-									text-transform: uppercase;
-									letter-spacing: 0.5px;
-								}
-								.field-value {
-									background-color: #f8f9fa;
-									padding: 12px 15px;
-									border-radius: 6px;
-									border-left: 4px solid #007bff;
-									font-size: 16px;
-									word-wrap: break-word;
-								}
-								.message-field {
-									background-color: #f8f9fa;
-									padding: 15px;
-									border-radius: 6px;
-									border-left: 4px solid #28a745;
-									font-size: 16px;
-									line-height: 1.6;
-									white-space: pre-wrap;
-								}
-								.footer {
-									text-align: center;
-									padding-top: 20px;
-									border-top: 1px solid #e9ecef;
-									color: #6c757d;
-									font-size: 12px;
-								}
-								.brand {
-									color: #007bff;
-									font-weight: 600;
-								}
-								.timestamp {
-									background-color: #e9ecef;
-									padding: 8px 12px;
-									border-radius: 4px;
-									font-size: 12px;
-									color: #6c757d;
-									text-align: center;
-									margin-bottom: 20px;
-								}
-							</style>
-						</head>
-						<body>
-							<div class="container">
-								<div class="header">
-									<h1>🎬 New Contact Form Submission</h1>
-									<p>CinemaMatch - Movie Recommendation Platform</p>
-								</div>
-								
-								<div class="timestamp">
-									📅 Received on: ${new Date().toLocaleString("en-US", {
-										weekday: "long",
-										year: "numeric",
-										month: "long",
-										day: "numeric",
-										hour: "2-digit",
-										minute: "2-digit",
-									})}
-								</div>
-								
-								<div class="content">
-									<div class="field-group">
-										<div class="field-label">👤 Name</div>
-										<div class="field-value">${name}</div>
-									</div>
-									
-									<div class="field-group">
-										<div class="field-label">📧 Email Address</div>
-										<div class="field-value">
-											<a href="mailto:${email}" style="color: #007bff; text-decoration: none;">${email}</a>
-										</div>
-									</div>
-									
-									<div class="field-group">
-										<div class="field-label">💬 Message</div>
-										<div class="message-field">${message}</div>
-									</div>
-								</div>
-								
-								<div class="footer">
-									<p>This message was sent through the <span class="brand">CinemaMatch</span> contact form.</p>
-									<p>Please respond to the sender at their provided email address.</p>
-								</div>
-							</div>
-						</body>
-						</html>
-					`,
-				};
+		// 						<div class="timestamp">
+		// 							📅 Received on: ${new Date().toLocaleString("en-US", {
+		// 								weekday: "long",
+		// 								year: "numeric",
+		// 								month: "long",
+		// 								day: "numeric",
+		// 								hour: "2-digit",
+		// 								minute: "2-digit",
+		// 							})}
+		// 						</div>
 
-				console.log("🔍 [EMAIL DEBUG] Email data prepared:");
-				console.log("  - From:", emailData.from);
-				console.log("  - To:", emailData.to);
-				console.log("  - Subject:", emailData.subject);
-				console.log("  - Transporter config:", {
-					host: transporter.options.host,
-					port: transporter.options.port,
-					secure: transporter.options.secure,
-					auth: {
-						user: transporter.options.auth.user,
-						pass: transporter.options.auth.pass ? "***SET***" : "***NOT SET***",
-					},
-				});
+		// 						<div class="content">
+		// 							<div class="field-group">
+		// 								<div class="field-label">👤 Name</div>
+		// 								<div class="field-value">${name}</div>
+		// 							</div>
 
-				console.log("🔍 [EMAIL DEBUG] Attempting to send email...");
-				const result = await transporter.sendMail(emailData);
-				console.log("✅ [EMAIL SUCCESS] Email sent successfully!");
-				console.log("🔍 [EMAIL DEBUG] Send result:", result);
-			} catch (emailError) {
-				console.error("❌ [EMAIL ERROR] Failed to send email:", emailError);
-				console.error("🔍 [EMAIL ERROR] Error details:", {
-					message: emailError.message,
-					code: emailError.code,
-					command: emailError.command,
-					response: emailError.response,
-					responseCode: emailError.responseCode,
-				});
-			}
-		});
+		// 							<div class="field-group">
+		// 								<div class="field-label">📧 Email Address</div>
+		// 								<div class="field-value">
+		// 									<a href="mailto:${email}" style="color: #007bff; text-decoration: none;">${email}</a>
+		// 								</div>
+		// 							</div>
+
+		// 							<div class="field-group">
+		// 								<div class="field-label">💬 Message</div>
+		// 								<div class="message-field">${message}</div>
+		// 							</div>
+		// 						</div>
+
+		// 						<div class="footer">
+		// 							<p>This message was sent through the <span class="brand">CinemaMatch</span> contact form.</p>
+		// 							<p>Please respond to the sender at their provided email address.</p>
+		// 						</div>
+		// 					</div>
+		// 				</body>
+		// 				</html>
+		// 			`,
+		// 		};
+		// 		const result = await transporter.sendMail(emailData);
+		// 	} catch (emailError) {
+		// 		console.error("❌ [EMAIL ERROR] Failed to send email:", emailError);
+		// 	}
+		// });
 
 		res.status(201).json({
 			success: true,
