@@ -3,6 +3,7 @@ const {
 	getFullMovieData,
 	getMovieDetails,
 	getMovieTrailer,
+	getMovieOttProviders,
 	discoverMovies: tmdbDiscover,
 } = require("../services/tmdb.service");
 const { generateEmbedding } = require("../services/embedding.service");
@@ -28,8 +29,11 @@ exports.getMovieDetails = async (req, res) => {
 	try {
 		const movieId = req.params.id;
 		const includeTrailer = req.query.include_trailer === "true" || req.query.include_trailer === "1";
+		const includeProviders = req.query.include_providers === "true" || req.query.include_providers === "1";
+
 		// Get basic movie details
 		const movie = await getMovieDetails(movieId);
+
 		// Add trailer if requested
 		if (includeTrailer) {
 			try {
@@ -38,6 +42,22 @@ exports.getMovieDetails = async (req, res) => {
 			} catch (trailerError) {
 				console.warn(`Failed to fetch trailer for movie ${movieId}:`, trailerError.message);
 				movie.trailer = null; // Don't fail the whole request if trailer fetch fails
+			}
+		}
+
+		// Add OTT providers if requested
+		if (includeProviders) {
+			try {
+				const providers = await getMovieOttProviders(movieId);
+				movie.ott_providers = providers;
+			} catch (providersError) {
+				console.warn(`Failed to fetch OTT providers for movie ${movieId}:`, providersError.message);
+				movie.ott_providers = {
+					stream: [],
+					rent: [],
+					buy: [],
+					hasAny: false,
+				}; // Don't fail the whole request if providers fetch fails
 			}
 		}
 
@@ -286,7 +306,7 @@ exports.likedMovies = async (req, res) => {
 				limit,
 				sort: { createdAt: -1 },
 				lean: true,
-			}
+			},
 		);
 
 		return res.json({

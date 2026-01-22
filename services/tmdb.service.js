@@ -1,4 +1,5 @@
 const axios = require("axios");
+const { ott_providers } = require("../utils/common.util");
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
@@ -65,7 +66,7 @@ const getPopularMovies = async (page = 1) => {
 			}
 		},
 		3,
-		1000
+		1000,
 	);
 };
 
@@ -104,7 +105,7 @@ const getMovieDetails = async (movieId) => {
 			}
 		},
 		3,
-		1000
+		1000,
 	);
 };
 
@@ -216,7 +217,7 @@ const discoverMovies = async (options = {}) => {
 					});
 					if (languagesArr && languagesArr.length > 0) {
 						response.data.results = response.data.results.filter((movie) =>
-							languagesArr.includes(movie.original_language)
+							languagesArr.includes(movie.original_language),
 						);
 					}
 					if (withGenres) {
@@ -225,7 +226,7 @@ const discoverMovies = async (options = {}) => {
 							: withGenres.split(",").map(Number);
 
 						response.data.results = response.data.results.filter((movie) =>
-							movie.genre_ids?.some((id) => genreIds.includes(id))
+							movie.genre_ids?.some((id) => genreIds.includes(id)),
 						);
 					}
 					return response.data;
@@ -261,7 +262,7 @@ const discoverMovies = async (options = {}) => {
 			}
 		},
 		3,
-		1000
+		1000,
 	);
 };
 // const discoverMoviesWithRetry = async (options = {}, retries = 3) => {
@@ -286,7 +287,8 @@ const getMoviesByDiscover = async (year, page, language) => {
 				primary_release_year: year,
 				with_original_language: language,
 				with_status: 0,
-				// "vote_average.gte": 5,
+				"vote_average.gte": 4,
+				"vote_count.gte": 10,
 			};
 
 			const response = await tmdbClient.get("/discover/movie", { params });
@@ -302,7 +304,7 @@ const getMoviesByDiscover = async (year, page, language) => {
 			};
 		},
 		3,
-		1000
+		1000,
 	);
 };
 
@@ -320,8 +322,8 @@ const getPopularMoviesByPage = async (page = 1, language = "en-US", yearGte) => 
 				page,
 				language,
 				sort_by: "popularity.desc",
-				"vote_count.gte": 10, // Ensure we get movies with some minimum votes
-				"vote_average.gte": 6, // Ensure we get movies with decent ratings
+				// "vote_count.gte": 10, // Ensure we get movies with some minimum votes
+				// "vote_average.gte": 6, // Ensure we get movies with decent ratings
 				with_status: 0, // Only include movies with status "Released"
 			};
 
@@ -346,7 +348,7 @@ const getPopularMoviesByPage = async (page = 1, language = "en-US", yearGte) => 
 			};
 		},
 		3,
-		1000
+		1000,
 	);
 };
 
@@ -363,7 +365,7 @@ const getMovieTrailer = async (movieId) => {
 				// Find official trailer first, then any trailer, then any video
 				const trailer =
 					videos.find(
-						(video) => video.type === "Trailer" && video.site === "YouTube" && video.official === true
+						(video) => video.type === "Trailer" && video.site === "YouTube" && video.official === true,
 					) ||
 					videos.find((video) => video.type === "Trailer" && video.site === "YouTube") ||
 					videos.find((video) => video.site === "YouTube");
@@ -394,7 +396,129 @@ const getMovieTrailer = async (movieId) => {
 			}
 		},
 		3,
-		1000
+		1000,
+	);
+};
+
+const getMovieOttProviders = async (movieId) => {
+	return withRetry(
+		async () => {
+			try {
+				const response = await tmdbClient.get(`/movie/${movieId}/watch/providers`, {
+					params: {},
+				});
+
+				const providers = response.data.results || {};
+
+				// Focus on major markets
+				const priorityRegions = ["US", "GB", "CA", "AU", "IN", "DE", "FR", "JP"];
+
+				let allProviders = {
+					stream: [],
+					rent: [],
+					buy: [],
+				};
+
+				// Collect providers from all available regions
+				Object.keys(providers).forEach((region) => {
+					const regionData = providers[region];
+
+					if (regionData.flatrate) {
+						regionData.flatrate.forEach((provider) => {
+							const existing = allProviders.stream.find((p) => p.name === provider.provider_name);
+							if (existing) {
+								existing.regions.push(region);
+							} else {
+								allProviders.stream.push({
+									name: provider.provider_name,
+									providerId: provider.provider_id,
+									regions: [region],
+									priority: provider.display_priority || 999,
+								});
+							}
+						});
+					}
+
+					if (regionData.rent) {
+						regionData.rent.forEach((provider) => {
+							const existing = allProviders.rent.find((p) => p.name === provider.provider_name);
+							if (existing) {
+								existing.regions.push(region);
+							} else {
+								allProviders.rent.push({
+									name: provider.provider_name,
+									providerId: provider.provider_id,
+									regions: [region],
+									priority: provider.display_priority || 999,
+								});
+							}
+						});
+					}
+
+					if (regionData.buy) {
+						regionData.buy.forEach((provider) => {
+							const existing = allProviders.buy.find((p) => p.name === provider.provider_name);
+							if (existing) {
+								existing.regions.push(region);
+							} else {
+								allProviders.buy.push({
+									name: provider.provider_name,
+									providerId: provider.provider_id,
+									regions: [region],
+									priority: provider.display_priority || 999,
+								});
+							}
+						});
+					}
+				});
+
+				// Sort by priority and get top 3 providers per category
+				const formatProviders = (providers) => {
+					return providers
+						.sort((a, b) => a.priority - b.priority)
+						.slice(0, 3)
+						.map((provider) => {
+							// Find matching provider logo
+							const providerInfo = ott_providers.find((p) => p.provider_name === provider.name);
+							return {
+								name: provider.name,
+								providerId: provider.providerId,
+								regions: provider.regions,
+								logo: providerInfo?.logo || null,
+							};
+						})
+						.filter((provider) => !provider.name.toLowerCase().includes("with ads")); // Remove providers with "with ads" in name
+				};
+
+				return {
+					stream: formatProviders(allProviders.stream),
+					rent: formatProviders(allProviders.rent),
+					buy: formatProviders(allProviders.buy),
+					hasAny:
+						allProviders.stream.length > 0 || allProviders.rent.length > 0 || allProviders.buy.length > 0,
+				};
+			} catch (error) {
+				if (error.response) {
+					if (error.response.status === 404) {
+						return {
+							stream: [],
+							rent: [],
+							buy: [],
+							hasAny: false,
+						};
+					}
+					throw new Error(`TMDB API error: ${error.response.status} - ${error.response.statusText}`);
+				} else if (error.request) {
+					throw new Error(
+						`Failed to fetch OTT providers for movie ${movieId}: Failed to connect to TMDB API`,
+					);
+				} else {
+					throw new Error(`Error fetching movie OTT providers: ${error.message}`);
+				}
+			}
+		},
+		3,
+		1000,
 	);
 };
 
@@ -410,4 +534,5 @@ module.exports = {
 	discoverMovies,
 	getMoviesByDiscover,
 	getMovieTrailer,
+	getMovieOttProviders,
 };
