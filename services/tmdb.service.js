@@ -1,6 +1,25 @@
 const axios = require("axios");
 const { ott_providers } = require("../utils/common.util");
 
+// Top OTT providers to prioritize (15 major streaming services)
+const TOP_OTT_PROVIDERS = [
+	"Netflix",
+	"Amazon Prime Video",
+	"Disney Plus",
+	"Apple TV",
+	"Hulu",
+	"Google Play Movies",
+	"YouTube",
+	"Microsoft Store",
+	"Rakuten TV",
+	"Sky Store",
+	"Peacock Premium",
+	"Paramount+",
+	"Starz",
+	"BINGE",
+	"Sony Liv",
+];
+
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
@@ -472,11 +491,20 @@ const getMovieOttProviders = async (movieId) => {
 					}
 				});
 
-				// Sort by priority and get top 3 providers per category
+				// Sort by priority and get top providers from predefined list
 				const formatProviders = (providers) => {
 					return providers
-						.sort((a, b) => a.priority - b.priority)
-						.slice(0, 3)
+						.filter((provider) => TOP_OTT_PROVIDERS.includes(provider.name)) // Only include top providers
+						.sort((a, b) => {
+							// Sort by TOP_OTT_PROVIDERS order first, then by priority
+							const aIndex = TOP_OTT_PROVIDERS.indexOf(a.name);
+							const bIndex = TOP_OTT_PROVIDERS.indexOf(b.name);
+							if (aIndex !== -1 && bIndex !== -1) {
+								return aIndex - bIndex; // Maintain TOP_OTT_PROVIDERS order
+							}
+							return a.priority - b.priority; // Fallback to priority sorting
+						})
+						.slice(0, 3) // Top 3 from our list
 						.map((provider) => {
 							// Find matching provider logo
 							const providerInfo = ott_providers.find((p) => p.provider_name === provider.name);
