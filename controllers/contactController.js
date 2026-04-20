@@ -40,7 +40,7 @@ const submitContact = async (req, res) => {
 						message: message,
 						subject: `Contact Form: Message from ${name}`,
 						_formspree: {
-							origin: window?.location?.origin || "CinemaMatch Backend",
+							origin: "CinemaMatch Backend",
 							timestamp: new Date().toISOString(),
 						},
 					};
