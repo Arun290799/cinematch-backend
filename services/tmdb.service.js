@@ -419,6 +419,84 @@ const getMovieTrailer = async (movieId) => {
 	);
 };
 
+const searchMovieByName = async (name) => {
+	return withRetry(
+		async () => {
+			try {
+				const response = await tmdbClient.get("/search/movie", {
+					params: {
+						query: name,
+						language: "en-US",
+					},
+				});
+
+				const results = response.data.results || [];
+
+				// Return the best match (first result with highest popularity)
+				if (results.length === 0) {
+					return null;
+				}
+
+				// Sort by popularity to get the best match
+				const sortedResults = results.sort((a, b) => b.popularity - a.popularity);
+
+				return sortedResults[0];
+			} catch (error) {
+				if (error.response) {
+					throw new Error(`TMDB API error: ${error.response.status} - ${error.response.statusText}`);
+				} else if (error.request) {
+					throw new Error("Failed to connect to TMDB API");
+				} else {
+					throw new Error(`Error searching movie by name: ${error.message}`);
+				}
+			}
+		},
+		3,
+		1000,
+	);
+};
+
+const getSimilarMovies = async (movieId) => {
+	return withRetry(
+		async () => {
+			try {
+				const response = await tmdbClient.get(`/movie/${movieId}/similar`, {
+					params: {
+						language: "en-US",
+						page: 1,
+					},
+				});
+
+				const results = response.data.results || [];
+
+				// Return top 15 similar movies
+				return results.slice(0, 15).map((movie) => ({
+					id: movie.id,
+					title: movie.title,
+					poster_path: movie.poster_path,
+					overview: movie.overview,
+					releaseDate: movie.release_date,
+					rating: movie.vote_average,
+					popularity: movie.popularity,
+				}));
+			} catch (error) {
+				if (error.response) {
+					if (error.response.status === 404) {
+						return []; // Movie not found, return empty array
+					}
+					throw new Error(`TMDB API error: ${error.response.status} - ${error.response.statusText}`);
+				} else if (error.request) {
+					throw new Error("Failed to connect to TMDB API");
+				} else {
+					throw new Error(`Error fetching similar movies: ${error.message}`);
+				}
+			}
+		},
+		3,
+		1000,
+	);
+};
+
 const getMovieOttProviders = async (movieId) => {
 	return withRetry(
 		async () => {
@@ -563,4 +641,6 @@ module.exports = {
 	getMoviesByDiscover,
 	getMovieTrailer,
 	getMovieOttProviders,
+	searchMovieByName,
+	getSimilarMovies,
 };

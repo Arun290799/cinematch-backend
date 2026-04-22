@@ -12,6 +12,7 @@ const {
 	likedMovies,
 	likedMovieIds,
 	clearAllLikes,
+	getMoviesLike,
 } = require("../controllers/movieController");
 
 const { protect } = require("../middleware/authMiddleware");
@@ -19,6 +20,7 @@ const { protect } = require("../middleware/authMiddleware");
 //public routes
 router.get("/discover", discoverMovies);
 router.get("/details/:id", getMovieDetails);
+router.get("/movies-like/:slug", getMoviesLike);
 
 router.get("/test/popular", testPopularMovies);
 router.get("/test/details/:id", testMovieDetails);

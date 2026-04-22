@@ -6,6 +6,7 @@ const {
 	getMovieOttProviders,
 	discoverMovies: tmdbDiscover,
 } = require("../services/tmdb.service");
+const { getMoviesLike } = require("../services/movieService");
 const { generateEmbedding } = require("../services/embedding.service");
 const User = require("../models/User");
 const Wishlist = require("../models/Wishlist");
@@ -366,5 +367,66 @@ exports.likedMovieIds = async (req, res) => {
 	} catch (error) {
 		console.error("likedMovieIds error:", error);
 		return res.status(500).json({ message: "Server error", error: error.message });
+	}
+};
+
+// SEO-friendly endpoint to get movie and similar movies by slug
+// Public route, no authentication required
+exports.getMoviesLike = async (req, res) => {
+	try {
+		const { slug } = req.params;
+		const useVector = req.query.use_vector !== "false"; // Default to true
+
+		// Validate slug
+		if (!slug || slug.trim() === "") {
+			return res.status(400).json({
+				success: false,
+				error: "Slug is required",
+			});
+		}
+
+		// Get movie and similar movies
+		const result = await getMoviesLike(slug, useVector);
+
+		// Handle movie not found
+		if (!result.movie) {
+			return res.status(404).json({
+				success: false,
+				error: "Movie not found",
+				slug,
+			});
+		}
+
+		res.json({
+			success: true,
+			movie: result.movie,
+			similarMovies: result.similarMovies,
+			count: result.similarMovies.length,
+		});
+	} catch (error) {
+		console.error("Error in getMoviesLike:", error);
+
+		// Handle specific error cases
+		if (error.message.includes("TMDB API error")) {
+			return res.status(502).json({
+				success: false,
+				error: "External API error",
+				details: error.message,
+			});
+		}
+
+		if (error.message.includes("Failed to connect")) {
+			return res.status(503).json({
+				success: false,
+				error: "Service unavailable",
+				details: error.message,
+			});
+		}
+
+		res.status(500).json({
+			success: false,
+			error: "Internal server error",
+			details: error.message,
+		});
 	}
 };
