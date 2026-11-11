@@ -139,13 +139,21 @@ const searchSimilarMovies = async (userVector, limit = 10, excludeMovieIds = [],
 			  }
 			: undefined;
 
-	const result = await qdrant.search(COLLECTION_NAME, {
-		vector: userVector,
-		limit,
-		filter,
-	});
+	const result =
+		typeof qdrant.search === "function"
+			? await qdrant.search(COLLECTION_NAME, {
+					vector: userVector,
+					limit,
+					filter,
+			  })
+			: await qdrant.query(COLLECTION_NAME, {
+					query: userVector,
+					limit,
+					filter,
+			  });
+	const points = Array.isArray(result) ? result : result.points;
 
-	return result.map((item) => ({
+	return points.map((item) => ({
 		movieId: item.payload.movieId,
 		score: item.score,
 		language: item.payload.language,
