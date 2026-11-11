@@ -12,6 +12,11 @@ const {
 	likedMovies,
 	likedMovieIds,
 	clearAllLikes,
+	guestLikedMovies,
+	guestLikeMovie,
+	guestDislikeMovie,
+	clearGuestLikes,
+	getGuestRecommendations,
 	getMoviesLike,
 } = require("../controllers/movieController");
 
@@ -21,6 +26,11 @@ const { protect } = require("../middleware/authMiddleware");
 router.get("/discover", discoverMovies);
 router.get("/details/:id", getMovieDetails);
 router.get("/movies-like/:slug", getMoviesLike);
+router.get("/guest-likes", guestLikedMovies);
+router.post("/guest-likes", guestLikeMovie);
+router.delete("/guest-likes", guestDislikeMovie);
+router.delete("/guest-likes/all", clearGuestLikes);
+router.get("/guest-recommendations", getGuestRecommendations);
 
 router.get("/test/popular", testPopularMovies);
 router.get("/test/details/:id", testMovieDetails);

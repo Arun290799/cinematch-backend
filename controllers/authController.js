@@ -1,5 +1,9 @@
 const User = require("../models/User");
+const LikedMovie = require("../models/LikedMovie");
+const GuestSession = require("../models/GuestSession");
 const jwt = require("jsonwebtoken");
+const { createHash } = require("crypto");
+const rebuildUserVector = require("../jobs/rebuildUserVector");
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -36,6 +40,48 @@ const sendTokenResponse = (user, statusCode, res) => {
 		});
 };
 
+const mergeGuestLikes = async (req, user) => {
+	const token = req.cookies?.guest_session;
+	if (!token || !/^[a-f0-9]{64}$/.test(token)) {
+		return;
+	}
+
+	const sessionHash = createHash("sha256").update(token).digest("hex");
+	const session = await GuestSession.findOne({ sessionHash, expiresAt: { $gt: new Date() } });
+	if (!session?.likes.length) {
+		return;
+	}
+
+	await LikedMovie.bulkWrite(
+		session.likes.map((movie) => ({
+			updateOne: {
+				filter: { user: user._id, movieId: movie.movieId },
+				update: {
+					$setOnInsert: {
+						user: user._id,
+						movieId: movie.movieId,
+						title: movie.title,
+						posterPath: movie.posterPath,
+						year: movie.year,
+						overview: movie.overview,
+						rating: movie.rating,
+					},
+				},
+				upsert: true,
+			},
+		})),
+		{ ordered: true },
+	);
+
+	session.likes = [];
+	await session.save();
+	setImmediate(() => {
+		rebuildUserVector(user._id).catch((error) => {
+			console.error(`Failed to rebuild user vector after guest like merge for ${user._id}:`, error);
+		});
+	});
+};
+
 // @desc    Register a new user
 // @route   POST /api/auth/register
 // @access  Public
@@ -59,6 +105,7 @@ exports.register = async (req, res, next) => {
 			password,
 		});
 
+		await mergeGuestLikes(req, user);
 		sendTokenResponse(user, 201, res);
 	} catch (error) {
 		next(error);
@@ -90,6 +137,7 @@ exports.login = async (req, res, next) => {
 			});
 		}
 
+		await mergeGuestLikes(req, user);
 		sendTokenResponse(user, 200, res);
 	} catch (error) {
 		next(error);

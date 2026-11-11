@@ -11,6 +11,7 @@ Express.js backend API for a movie recommender application with user authenticat
 - MongoDB integration with Mongoose
 - CORS configuration
 - Cookie-based token storage
+- Guest movie likes (up to 10) and up to 2 pages of recommendations with a 24-hour anonymous session
 
 ## Prerequisites
 
@@ -62,6 +63,18 @@ npm start
 The server will start on `http://localhost:5000` (or the port specified in your `.env` file).
 
 ## API Endpoints
+
+### Guest Movie Routes
+
+- **GET** `/api/movies/guest-likes` — get the current guest session's likes and limit
+- **POST** `/api/movies/guest-likes` — add a guest like (maximum 10); expects `movieId` and `title`
+- **DELETE** `/api/movies/guest-likes` — remove a guest like; expects `movieId`
+- **DELETE** `/api/movies/guest-likes/all` — clear guest likes
+- **GET** `/api/movies/guest-recommendations` — get recommendations based on guest likes
+
+Guest recommendation requests are limited to pages 1 and 2. When more results are available after page 2, the response sets `guest_limit_reached: true`.
+
+Guest routes issue an HTTP-only `guest_session` cookie. Guest data expires 24 hours after the session is created and is automatically removed by MongoDB's TTL index. Signing in or registering merges those likes into the account and clears the guest list.
 
 ### Authentication Routes
 
@@ -187,4 +200,3 @@ All errors are handled by the error middleware and return a consistent format:
 ## License
 
 ISC
-

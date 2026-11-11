@@ -1,3 +1,4 @@
+const { createHash, randomBytes } = require("crypto");
 const {
 	getPopularMovies,
 	getFullMovieData,
@@ -11,10 +12,243 @@ const { generateEmbedding } = require("../services/embedding.service");
 const User = require("../models/User");
 const Wishlist = require("../models/Wishlist");
 const LikedMovie = require("../models/LikedMovie");
+const GuestSession = require("../models/GuestSession");
 const { searchSimilarMovies } = require("../services/vector.service");
+const { getOrCreateMovieVector } = require("../services/movieVector.service");
 const { promisePool } = require("../utils/common.util");
+const { averageVectors } = require("../utils/vector.util");
 const processMovieVector = require("../jobs/processMovieVector");
 const rebuildUserVector = require("../jobs/rebuildUserVector");
+
+const GUEST_LIKE_LIMIT = 10;
+const GUEST_SESSION_MAX_AGE = 24 * 60 * 60 * 1000;
+const GUEST_SESSION_COOKIE = "guest_session";
+
+const hashGuestToken = (token) => createHash("sha256").update(token).digest("hex");
+
+const getGuestSession = async (req, res) => {
+	let token = req.cookies?.[GUEST_SESSION_COOKIE];
+	if (token && /^[a-f0-9]{64}$/.test(token)) {
+		const existing = await GuestSession.findOne({ sessionHash: hashGuestToken(token) });
+		if (existing && existing.expiresAt <= new Date()) {
+			token = null;
+		}
+	}
+	if (!token || !/^[a-f0-9]{64}$/.test(token)) {
+		token = randomBytes(32).toString("hex");
+	}
+
+	const session = await GuestSession.findOneAndUpdate(
+		{ sessionHash: hashGuestToken(token) },
+		{
+			$setOnInsert: {
+				likes: [],
+				expiresAt: new Date(Date.now() + GUEST_SESSION_MAX_AGE),
+			},
+		},
+		{ new: true, upsert: true, setDefaultsOnInsert: true },
+	);
+
+	res.cookie(GUEST_SESSION_COOKIE, token, {
+		httpOnly: true,
+		secure: process.env.NODE_ENV === "production",
+		sameSite: "lax",
+		path: "/",
+		maxAge: Math.max(session.expiresAt.getTime() - Date.now(), 0),
+	});
+
+	return session;
+};
+
+const validateGuestMovie = (body) => {
+	const movieId = Number(body.movieId);
+	if (!Number.isSafeInteger(movieId) || movieId <= 0 || typeof body.title !== "string" || !body.title.trim()) {
+		return null;
+	}
+
+	return {
+		movieId,
+		title: body.title.trim().slice(0, 300),
+		posterPath: typeof body.posterUrl === "string" ? body.posterUrl.slice(0, 500) : "",
+		year: body.year == null ? "" : String(body.year).slice(0, 20),
+		overview: typeof body.overview === "string" ? body.overview.slice(0, 5000) : "",
+		rating: body.rating != null && Number.isFinite(Number(body.rating)) ? Number(body.rating) : undefined,
+	};
+};
+
+exports.guestLikedMovies = async (req, res) => {
+	try {
+		const session = await getGuestSession(req, res);
+		const results = [...session.likes].reverse();
+		return res.json({
+			success: true,
+			count: results.length,
+			limit: GUEST_LIKE_LIMIT,
+			likedMovieIds: results.map((movie) => movie.movieId),
+			results,
+		});
+	} catch (error) {
+		console.error("guestLikedMovies error:", error);
+		return res.status(500).json({ success: false, error: "Failed to fetch guest likes" });
+	}
+};
+
+exports.guestLikeMovie = async (req, res) => {
+	try {
+		const movie = validateGuestMovie(req.body || {});
+		if (!movie) {
+			return res.status(400).json({ success: false, error: "A valid movie ID and title are required" });
+		}
+
+		const session = await getGuestSession(req, res);
+		const updated = await GuestSession.findOneAndUpdate(
+			{
+				_id: session._id,
+				"likes.movieId": { $ne: movie.movieId },
+				$expr: { $lt: [{ $size: "$likes" }, GUEST_LIKE_LIMIT] },
+			},
+			{ $push: { likes: movie } },
+			{ new: true, runValidators: true },
+		);
+
+		if (updated) {
+			return res.status(201).json({
+				success: true,
+				count: updated.likes.length,
+				limit: GUEST_LIKE_LIMIT,
+				likedMovieIds: updated.likes.map((likedMovie) => likedMovie.movieId),
+			});
+		}
+
+		const current = await GuestSession.findById(session._id);
+		if (!current) {
+			return res.status(409).json({ success: false, error: "Guest session expired. Refresh and try again." });
+		}
+
+		if (current.likes.some((likedMovie) => likedMovie.movieId === movie.movieId)) {
+			return res.json({
+				success: true,
+				count: current.likes.length,
+				limit: GUEST_LIKE_LIMIT,
+				likedMovieIds: current.likes.map((likedMovie) => likedMovie.movieId),
+			});
+		}
+
+		return res.status(429).json({
+			success: false,
+			error: `Guests can like up to ${GUEST_LIKE_LIMIT} movies. Sign in to like more.`,
+			count: current.likes.length,
+			limit: GUEST_LIKE_LIMIT,
+		});
+	} catch (error) {
+		console.error("guestLikeMovie error:", error);
+		return res.status(500).json({ success: false, error: "Failed to like movie" });
+	}
+};
+
+exports.guestDislikeMovie = async (req, res) => {
+	try {
+		const movieId = Number(req.body?.movieId);
+		if (!Number.isSafeInteger(movieId) || movieId <= 0) {
+			return res.status(400).json({ success: false, error: "A valid movie ID is required" });
+		}
+
+		const session = await getGuestSession(req, res);
+		const updated = await GuestSession.findByIdAndUpdate(
+			session._id,
+			{ $pull: { likes: { movieId } } },
+			{ new: true },
+		);
+
+		return res.json({
+			success: true,
+			count: updated.likes.length,
+			limit: GUEST_LIKE_LIMIT,
+			likedMovieIds: updated.likes.map((movie) => movie.movieId),
+		});
+	} catch (error) {
+		console.error("guestDislikeMovie error:", error);
+		return res.status(500).json({ success: false, error: "Failed to remove guest like" });
+	}
+};
+
+exports.clearGuestLikes = async (req, res) => {
+	try {
+		const session = await getGuestSession(req, res);
+		session.likes = [];
+		await session.save();
+		return res.json({ success: true, count: 0, limit: GUEST_LIKE_LIMIT, likedMovieIds: [] });
+	} catch (error) {
+		console.error("clearGuestLikes error:", error);
+		return res.status(500).json({ success: false, error: "Failed to clear guest likes" });
+	}
+};
+
+exports.getGuestRecommendations = async (req, res) => {
+	try {
+		const token = req.cookies?.[GUEST_SESSION_COOKIE];
+		if (!token || !/^[a-f0-9]{64}$/.test(token)) {
+			return res.json({ success: true, page: 1, total_pages: 0, total_results: 0, results: [] });
+		}
+
+		const session = await GuestSession.findOne({
+			sessionHash: hashGuestToken(token),
+			expiresAt: { $gt: new Date() },
+		});
+		if (!session?.likes.length) {
+			return res.json({ success: true, page: 1, total_pages: 0, total_results: 0, results: [] });
+		}
+
+		const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+		if (page > 2) {
+			return res.status(403).json({
+				success: false,
+				error: "Guests can view up to 2 pages of recommendations. Sign in to see more.",
+				guest_limit_reached: true,
+				limit_pages: 2,
+			});
+		}
+		const languages = req.query.languages ? req.query.languages.split(",").filter(Boolean) : [];
+		const genres = req.query.genres ? req.query.genres.split(",").filter(Boolean) : [];
+		const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 40, 1), 40);
+		const vectors = (
+			await promisePool(session.likes, 3, async ({ movieId }) => getOrCreateMovieVector(movieId))
+		).filter(Boolean);
+
+		if (!vectors.length) {
+			return res.json({ success: true, page, total_pages: 0, total_results: 0, results: [] });
+		}
+
+		const likedIds = session.likes.map((movie) => movie.movieId);
+		const results = await searchSimilarMovies(averageVectors(vectors), 500, likedIds, { languages, genres });
+		const totalResults = results.length;
+		const availablePages = totalResults === 0 ? 0 : Math.ceil(totalResults / limit);
+		const totalPages = Math.min(availablePages, 2);
+		const pageItems = results.slice((page - 1) * limit, page * limit);
+		const recommendations = (
+			await promisePool(pageItems, 5, async (result) => {
+				try {
+					return { ...(await getMovieDetails(result.movieId)), score: result.score };
+				} catch (error) {
+					console.error(`Failed to fetch TMDB details for movie ${result.movieId}:`, error.message);
+					return null;
+				}
+			})
+		).filter(Boolean);
+
+		return res.json({
+			success: true,
+			page,
+			total_pages: totalPages,
+			total_results: totalResults,
+			guest_limit_reached: availablePages > 2 && page === 2,
+			results: recommendations,
+		});
+	} catch (error) {
+		console.error("getGuestRecommendations error:", error);
+		return res.status(500).json({ success: false, error: "Failed to generate guest recommendations" });
+	}
+};
 
 exports.testPopularMovies = async (req, res) => {
 	const movies = await getPopularMovies();
