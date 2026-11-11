@@ -145,21 +145,31 @@ const searchSimilarMovies = async (userVector, limit = 10, excludeMovieIds = [],
 					vector: userVector,
 					limit,
 					filter,
+					with_payload: true,
 			  })
 			: await qdrant.query(COLLECTION_NAME, {
 					query: userVector,
 					limit,
 					filter,
+					with_payload: true,
 			  });
 	const points = Array.isArray(result) ? result : result.points;
 
-	return points.map((item) => ({
-		movieId: item.payload.movieId,
-		score: item.score,
-		language: item.payload.language,
-		genres: item.payload.genres,
-		releaseDate: item.payload.releaseDate,
-	}));
+	return points.map((item) => {
+		const payload = item.payload || {};
+		const movieId = payload.movieId ?? item.id;
+		if (movieId == null) {
+			throw new Error("Qdrant returned a movie point without a movie ID");
+		}
+
+		return {
+			movieId,
+			score: item.score,
+			language: payload.language,
+			genres: payload.genres,
+			releaseDate: payload.releaseDate,
+		};
+	});
 };
 
 module.exports = {
